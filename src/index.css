@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-slate-950: #020617;
+  --color-slate-900: #0F172A;
+  --color-slate-800: #1E293B;
+  --color-slate-700: #334155;
+  --color-slate-400: #94A3B8;
+  --color-slate-300: #CBD5E1;
+  --color-slate-50: #F8FAFC;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-slate-50 bg-slate-900 selection:bg-emerald-500/30 selection:text-emerald-100;
+  }
+}
+
+@layer components {
+  .pane {
+    @apply bg-slate-900 p-5;
+  }
+
+  .stat-card {
+    @apply border border-slate-800 bg-slate-950 p-4 rounded-sm;
+  }
+
+  .metric-bar {
+    @apply h-1 bg-slate-700 rounded-full w-full overflow-hidden;
+  }
+
+  .metric-fill {
+    @apply h-full transition-all duration-500;
+  }
+
+  .tag {
+    @apply text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-sm;
+  }
+
+  .blockchain-card {
+    @apply min-w-[220px] border border-slate-800 rounded-sm p-3 bg-slate-950/50 hover:bg-slate-950 transition-colors;
+  }
+
+  .geometric-grid {
+    display: grid;
+    grid-template-columns: 290px 1fr 340px;
+    grid-template-rows: 1fr auto;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+}
