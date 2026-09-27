@@ -805,12 +805,28 @@ async function startServer() {
 Context: ${contextSummary}
 User Question: "${message}"`;
 
-        const response = await aiClient.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-        });
+        let responseText = "";
+        try {
+          const response = await aiClient.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+          });
+          responseText = response.text || "";
+        } catch (mErr) {
+          try {
+            const response = await aiClient.models.generateContent({
+              model: "gemini-1.5-flash",
+              contents: prompt,
+            });
+            responseText = response.text || "";
+          } catch (mErr2: any) {
+            console.error("Gemini 1.5-flash call failed:", mErr2.message);
+          }
+        }
 
-        return res.json({ reply: response.text });
+        if (responseText) {
+          return res.json({ reply: responseText });
+        }
       } catch (err: any) {
         console.error("Gemini API call failed, falling back to rule-based engine:", err.message);
       }
