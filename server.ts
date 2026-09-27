@@ -787,40 +787,78 @@ async function startServer() {
     res.json({ message: `Successfully redeemed '${item.title}'!`, balance: userTokens.balance - item.tokenCost, blockchain: block });
   });
 
-  // --- FEATURE 7: AI Copilot (Gemini Integration) Endpoints ---
+  // --- FEATURE 7: Omni-Functional AI Copilot (Gemini Master Integration) ---
   app.post("/api/copilot/chat", async (req, res) => {
     const { message } = req.body;
     if (!message) return res.status(400).json({ error: "Message is required" });
 
-    const resources = db.prepare("SELECT count(*) as c FROM resources").get() as any;
-    const zombies = db.prepare("SELECT count(*) as c FROM resources WHERE status = 'Zombie'").get() as any;
+    // Fetch full real-time database state
+    const totalResources = db.prepare("SELECT count(*) as c FROM resources").get() as any;
+    const zombieResources = db.prepare("SELECT count(*) as c FROM resources WHERE status = 'Zombie'").get() as any;
+    const zombieList = db.prepare("SELECT * FROM resources WHERE status = 'Zombie' LIMIT 8").all() as any[];
+    const prList = db.prepare("SELECT * FROM iac_prs ORDER BY createdAt DESC LIMIT 5").all() as any[];
+    const regionList = db.prepare("SELECT * FROM carbon_regions ORDER BY carbonGco2 ASC").all() as any[];
+    const blockchainCount = db.prepare("SELECT count(*) as c FROM blockchain").get() as any;
+    const zkCount = db.prepare("SELECT count(*) as c FROM zk_proofs").get() as any;
     const config = db.prepare("SELECT value FROM config WHERE key = 'carbonIntensity'").get() as any;
     const tokenInfo = db.prepare("SELECT balance, totalSavedKg, totalSavedUsd FROM eco_tokens WHERE username = ?").get(req.user.username) as any;
 
-    const contextSummary = `EcoScale Live State: Total Nodes: ${resources.c}, Zombie Anomalies: ${zombies.c}, Grid Carbon Intensity: ${config ? config.value : 'Medium'}, User Tokens: ${tokenInfo ? tokenInfo.balance : 1450} ECO, USD Saved: $${tokenInfo ? tokenInfo.totalSavedUsd : 480}, CO2 Prevented: ${tokenInfo ? tokenInfo.totalSavedKg : 128} kg.`;
+    const systemContext = `You are the Omni-Functional Master Copilot for EcoScale AI — an intelligent, closed-loop cloud optimization and GreenOps governance system.
+You possess deep, technical domain expertise in Cloud Infrastructure (AWS, Azure, GCP, Kubernetes), FinOps cost engineering, GreenOps carbon intensity algorithms, Terraform/Pulumi IaC, Cryptography (SHA-256, zk-SNARKs), and Software Architecture.
+
+You have DIRECT, REAL-TIME ACCESS to the live EcoScale database telemetry below:
+
+### 📊 REAL-TIME LIVE CLUSTER TELEMETRY & DATABASE STATE
+- **Total Monitored Nodes**: ${totalResources.c} (EC2, RDS, Lambda)
+- **Flagged Zombie Anomalies**: ${zombieResources.c} nodes (CPU < 8.0%, NET < 5.0MB)
+- **Dynamic Grid Carbon State**: ${config ? config.value : 'Medium'} Intensity
+- **User ECO Tokens**: ${tokenInfo ? tokenInfo.balance : 1450} ECO
+- **Total Financial USD Saved**: $${tokenInfo ? tokenInfo.totalSavedUsd : 480.00}
+- **Total Carbon Prevented**: ${tokenInfo ? tokenInfo.totalSavedKg : 128.4} kg CO2
+- **Blockchain Audit Height**: ${blockchainCount.c} Blocks (SHA-256 Hash Chain)
+- **Verified zk-SNARK Proofs**: ${zkCount.c} Privacy-Preserving Proofs
+
+### 🛑 ACTIVE ZOMBIE RESOURCES IN CLUSTER
+${zombieList.length > 0 ? zombieList.map((z: any) => `- Node **${z.name}** (${z.type.toUpperCase()}) | Region: \`${z.region}\` | CPU: ${z.cpu}% | NET: ${z.network}MB | RAM: ${z.memory}% | Recommendation: ${z.recommendation || 'Downscale'}`).join('\n') : 'No active zombie anomalies detected.'}
+
+### 🛠️ GITOPS IAC PULL REQUESTS
+${prList.length > 0 ? prList.map((p: any) => `- PR **${p.id}**: "${p.title}" | Status: [${p.status}] | Savings: +$${p.costSavingsUsd}/mo, -${p.carbonSavingsKg}kg CO2`).join('\n') : 'No open IaC pull requests.'}
+
+### 🌍 GLOBAL CARBON GRID REGIONS
+${regionList.map((r: any) => `- **${r.name}** (\`${r.code}\`): ${r.carbonGco2} gCO2/kWh (${r.renewablePercent}% Renewable - ${r.primarySource})`).join('\n')}
+
+### 📜 SYSTEM ARCHITECTURE OVERVIEW (ECOSCALE AI)
+1. **Anomaly Detection**: Heuristic Isolation Forest algorithm detecting underutilized compute pulse.
+2. **GreenOps Shifting**: Cross-references live power grid carbon intensity (gCO2eq/kWh) to defer high-emission spin-downs or migrate workloads to green hydro/wind regions.
+3. **GitOps IaC Auto-Remediation**: Generates declarative HCL Terraform diffs and creates GitHub Pull Requests.
+4. **Blockchain & ZK Audit**: SHA-256 block ledger combined with zk-SNARK salted commitment proofs for privacy-preserving ESG compliance.
+5. **Eco-Tokenomics**: Gamified FinOps wallet where admins earn ECO Tokens for optimizations to redeem AWS cloud credits & tree certificates.
+
+### 🎯 YOUR INSTRUCTIONS:
+1. Answer ANY user question comprehensively—whether it's about this project, live cluster metrics, AWS EC2/RDS/Lambda architecture, Terraform code snippets, FinOps math, or general cloud engineering.
+2. Always format your responses cleanly using Markdown (headings ###, bold text, tables, bullet points, and syntax-highlighted code blocks).
+3. If asked about specific nodes, PRs, carbon regions, or tokens, refer to the exact real-time live data provided above!
+`;
 
     if (aiClient) {
       try {
-        const prompt = `You are EcoScale AI FinOps & GreenOps Architectural Copilot. Answer the user's question expertly using Markdown formatting, technical cloud depth, cost optimization formulas, and sustainability recommendations.
-Context: ${contextSummary}
-User Question: "${message}"`;
+        const fullPrompt = `${systemContext}\n\nUser Question: "${message}"`;
 
         let responseText = "";
-        try {
-          const response = await aiClient.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-          });
-          responseText = response.text || "";
-        } catch (mErr) {
+        const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
+        
+        for (const modelName of modelsToTry) {
           try {
             const response = await aiClient.models.generateContent({
-              model: "gemini-1.5-flash",
-              contents: prompt,
+              model: modelName,
+              contents: fullPrompt,
             });
-            responseText = response.text || "";
-          } catch (mErr2: any) {
-            console.error("Gemini 1.5-flash call failed:", mErr2.message);
+            if (response && response.text) {
+              responseText = response.text;
+              break;
+            }
+          } catch (mErr: any) {
+            // try next model
           }
         }
 
@@ -832,54 +870,30 @@ User Question: "${message}"`;
       }
     }
 
+    // Fallback response with telemetry
     const query = message.toLowerCase();
-    let reply = "";
+    let reply = `### 🤖 EcoScale Master Copilot Telemetry Diagnostic\n\n`;
 
     if (query.includes("zombie") || query.includes("anomaly") || query.includes("idle")) {
-      reply = `### 🔍 EcoScale Anomaly Detection Analysis
-Current telemetry shows **${zombies.c} Zombie Nodes** out of **${resources.c} total cluster resources**.
-
-**Detection Algorithm**:
-Our Isolation Forest heuristic flags nodes where CPU utilization falls below **8.0%** and network packet throughput stays under **5.0 MB/s**.
-
-**Recommended Actions**:
-1. Run a GitOps IaC PR generation to downscale instances automatically.
-2. If dynamic grid intensity is **High**, defer terminations to prevent carbon emission spikes.`;
-    } else if (query.includes("carbon") || query.includes("green") || query.includes("grid")) {
-      reply = `### 🌿 Dynamic Carbon Grid Optimization
-Current Cluster Grid Status: **${config ? config.value : 'Medium'} Carbon Intensity**.
-
-**Optimal Green Regions Available**:
-- **Europe (Paris - eu-west-3)**: **45 gCO2/kWh** (92% Hydro/Nuclear)
-- **US West (Oregon - us-west-2)**: **110 gCO2/kWh** (78% Wind/Hydro)
-
-**Recommendation**:
-Migrating batch workloads from \`ap-south-1\` (610 gCO2/kWh) to \`eu-west-3\` reduces your cloud carbon footprint by **92.6%** instantly!`;
-    } else if (query.includes("cost") || query.includes("save") || query.includes("dollar") || query.includes("token")) {
-      reply = `### 💰 FinOps & Tokenomics ROI Summary
-- **Current ECO Tokens**: **${tokenInfo ? tokenInfo.balance : 1450} ECO**
-- **Direct USD Saved**: **$${tokenInfo ? tokenInfo.totalSavedUsd : 480.00}**
-- **CO2 Prevented**: **${tokenInfo ? tokenInfo.totalSavedKg : 128.4} kg CO2**
-
-You can redeem your ECO Tokens in the **FinOps Marketplace** for AWS credits, tree planting certificates, and priority CI/CD runners!`;
+      reply += ` telemetry shows **${zombieResources.c} Zombie Nodes** out of **${totalResources.c} total cluster resources**.\n\n`;
+      reply += `#### Active Flagged Nodes:\n`;
+      zombieList.forEach(z => {
+        reply += `- **${z.name}** (\`${z.region}\`): CPU ${z.cpu}%, NET ${z.network}MB/s ➔ *${z.recommendation || 'Downscale'}*\n`;
+      });
+      reply += `\n**Isolation Forest Criteria**: CPU < 8.0% and Network throughput < 5.0 MB/s.`;
+    } else if (query.includes("carbon") || query.includes("green") || query.includes("grid") || query.includes("region")) {
+      reply += `Current dynamic grid state is **${config ? config.value : 'Medium'} Carbon Intensity**.\n\n`;
+      reply += `#### Global Region Emission Table:\n\n| Region | Code | Carbon Intensity | Renewable % |\n| :--- | :--- | :--- | :--- |\n`;
+      regionList.forEach(r => {
+        reply += `| ${r.name} | \`${r.code}\` | **${r.carbonGco2} gCO2/kWh** | ${r.renewablePercent}% |\n`;
+      });
     } else {
-      reply = `### 🤖 EcoScale AI FinOps Copilot
-Greetings! I am your intelligent cloud architecture advisor.
-
-**Active Cluster Diagnostics**:
-- Total Monitored Nodes: **${resources.c}**
-- Waste Percentage: **${resources.c > 0 ? Math.round((zombies.c / resources.c) * 100) : 0}%**
-- Total Carbon Prevented: **${tokenInfo ? tokenInfo.totalSavedKg : 128.4} kg**
-
-Feel free to ask me about:
-1. *GitOps IaC auto-remediation snippets*
-2. *Dynamic carbon-aware region shifting*
-3. *zk-SNARK privacy-preserving blockchain audit trails*
-4. *AWS Graviton right-sizing recommendations*`;
+      reply += `**Active Cluster Overview**:\n- Monitored Nodes: **${totalResources.c}** | Zombies: **${zombieResources.c}**\n- Wallet Balance: **${tokenInfo ? tokenInfo.balance : 1450} ECO Tokens**\n- Verified FinOps Savings: **$${tokenInfo ? tokenInfo.totalSavedUsd : 480.00} USD** | **${tokenInfo ? tokenInfo.totalSavedKg : 128.4} kg CO2**\n- Blockchain Height: **${blockchainCount.c} Blocks** | zk-SNARK Proofs: **${zkCount.c} Verified**\n\nAsk me about any node, Terraform PR, zk-SNARK proof, or AWS architecture strategy!`;
     }
 
     res.json({ reply });
   });
+
 
   // Vite middleware
   if (process.env.NODE_ENV !== "production") {
